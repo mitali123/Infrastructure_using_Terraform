@@ -74,7 +74,7 @@ The architecture consists of the following major components:
    │  - Lambda Deployment Packages                                │
    └───────────────────────────────────────────────────────────-──┘
 
-
+```
 
 ## What This Infrastructure Includes
 🌐 Networking
