@@ -1,155 +1,178 @@
-# Infrastructure_using_Terraform
+# AWS Infrastructure Using Terraform
+
+This repository contains Terraform configurations that automate the creation of a complete AWS infrastructure environment. It provisions networking, compute, storage, database, security, and associated services required to run a cloud-based application in a scalable and reliable way.
+
+## Architecture Summary
+
+The architecture consists of the following major components:
 
-This Terraform project provisions a full production-grade AWS environment designed for a scalable web application. It automates the setup of networking, compute, storage, security, CI/CD integration, monitoring, and serverless components. The configuration creates a highly available infrastructure built around best practices for reliability, security, and automation.
+1. VPC with public and private subnets across multiple Availability Zones
+2. Internet Gateway and Route Tables for public routing
+3. EC2 instance placed in a public subnet
+4. RDS MySQL instance placed inside highly available private subnets
+5. S3 buckets for application assets, CodeDeploy artifacts, and Lambda functions
+6. IAM role for EC2 access to S3
 
-## Key Components
+## Architecture Overview
 
-### 1. Networking (VPC + Subnets + Routing)
+```                       ┌────────────────────────────┐
+                          │          Route 53          │
+                          │  DNS (app.example.com)     │
+                          └─────────────┬──────────────┘
+                                        │
+                                        ▼
+                          ┌────────────────────────────┐
+                          │   Application Load Balancer│
+                          │   (HTTPS :443, ACM Cert)   │
+                          │   Public Subnets (3 AZs)   │
+                          └─────────────┬──────────────┘
+                                        │
+                        ┌───────────────┼────────────────┐
+                        │               │                │
+                        ▼               ▼                ▼
+        ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
+        │  EC2 Auto Scaling  │ │  EC2 Auto Scaling  │ │  EC2 Auto Scaling  │
+        │  App Instances     │ │  App Instances     │ │  App Instances     │
+        │  Private Subnet AZ1│ │  Private Subnet AZ2│ │  Private Subnet AZ3│
+        └─────────┬──────────┘ └─────────┬──────────┘ └─────────┬──────────┘
+                  │                      │                      │
+                  │                      │                      │
+                  ▼                      ▼                      ▼
+        ┌──────────────────────────────────────────────────────────┐
+        │                     Amazon RDS (MySQL)                   │
+        │              Private Subnets (Multi-AZ)                  │
+        └──────────────────────────────────────────────────────────┘
 
-Creates a dedicated VPC (172.16.0.0/16)
+────────────────────────────────────────────────────────────────────────
 
-Provisions three public subnets across different Availability Zones
+         ┌───────────────────────┐
+         │        Amazon SNS     │
+         │   Password Reset Topic│
+         └───────────┬───────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │     AWS Lambda        │
+         │  Password Reset Logic │
+         └───────────┬───────────┘
+                     │
+         ┌───────────┼───────────┐
+         │           │           │
+         ▼           ▼           ▼
+ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐
+ │  DynamoDB   │ │ Amazon SES  │ │ CloudWatch Logs │
+ │  Token Store│ │ Email Notify│ │   & Metrics     │
+ └─────────────┘ └─────────────┘ └─────────────────┘
 
-Configures an Internet Gateway and route table for outbound internet access
+────────────────────────────────────────────────────────────────────────
 
-Associates each subnet with the route table
+   ┌──────────────────────────────────────────────────────────────┐
+   │                            Amazon S3                         │
+   │  - Web App Assets Bucket                                     │
+   │  - CodeDeploy Artifacts                                      │
+   │  - Lambda Deployment Packages                                │
+   └───────────────────────────────────────────────────────────-──┘
 
-### 2. Security Groups
 
-Application SG: Allows ALB traffic to EC2 instances on port 3002
 
-Database SG: Allows MySQL access (3306) from application instances
+## What This Infrastructure Includes
+🌐 Networking
 
-ALB SG: Allows inbound HTTPS (443)
+Custom VPC with a dedicated CIDR block
 
-### 3. Application Load Balancer (ALB)
+Three public subnets across multiple Availability Zones for internet-facing components
 
-Internet-facing ALB
+Three private subnets for application workloads, isolated from direct internet access
 
-HTTPS listener configured with ACM certificate
+Internet Gateway for inbound and outbound public traffic
 
-Target group with health checks and cookie-based stickiness
+NAT Gateway enabling secure outbound internet access from private subnets
 
-Integrated with Auto Scaling Group
+Route tables configured to enforce proper traffic flow between tiers
 
-### 4. Compute Layer (EC2 + Auto Scaling)
+⚖️ Load Balancing & DNS
 
-Launch configuration for app instances with:
+Application Load Balancer (ALB) deployed in public subnets
 
-User-data providing environment variables (DB host, S3 bucket, etc.)
+HTTPS listener (port 443) secured with an ACM SSL certificate
 
-IAM instance profile for S3/RDS/SNS access
+Route 53 DNS record mapping a custom domain to the ALB
 
-Auto Scaling Group with:
+ALB security group allowing only HTTPS traffic from the internet
 
-Min: 2, Max: 5 instances
+🖥️ Compute (Application Tier)
 
-CPU-based CloudWatch scaling policies (scale up/down)
+EC2 instances running in private subnets
 
-ASG attached to the ALB target group
+Auto Scaling Group for high availability and horizontal scalability
 
-### 5. Database Layer (RDS)
+Security groups enforcing least-privilege access between ALB, application, and database layers
 
-MySQL 8.0 RDS instance
+Outbound internet access via NAT Gateway for updates and external API calls
 
-Encrypted storage
+🗄️ Data Layer
 
-Private subnets (via DB subnet group)
+Amazon RDS (MySQL) deployed in private subnets
 
-Parameter group enabling performance schema
+Multi-AZ configuration for fault tolerance
 
-### 6. Storage (S3 Buckets)
+No public accessibility, ensuring the database is reachable only from the application tier
 
-Creates and configures:
+⚡ Serverless & Event-Driven Components
 
-Webapp bucket
+Amazon SNS topic for asynchronous events (e.g., password reset requests)
 
-CodeDeploy artifacts bucket
+AWS Lambda function triggered by SNS
 
-Lambda code bucket
+Amazon DynamoDB table for temporary token storage
 
-All include:
+Amazon SES integration for sending transactional emails
 
-Private access
+Fully decoupled, event-driven workflow
 
-Server-side encryption (AES-256)
+📦 Storage & Deployment
 
-Lifecycle rules for cost optimization
+Amazon S3 buckets for:
 
-### 7. CI/CD Integration (CodeDeploy + IAM for CircleCI)
+Web application assets
 
-CodeDeploy application + deployment group
+AWS CodeDeploy application revisions
 
-Integration with Auto Scaling Group + ALB
+Lambda deployment packages
 
-Full IAM policy set for a CircleCI user:
+Designed to support CI/CD pipelines and versioned deployments
 
-Upload artifacts to S3
+🔐 Security & Best Practices
 
-Trigger CodeDeploy deployments
+Private subnets for sensitive workloads
 
-Manage Lambda functions
+Encrypted communication via HTTPS
 
-### 8. IAM Roles & Permissions
+IAM-based access control between services
 
-EC2 role with access to:
+Separation of concerns across network, compute, and data layers
 
-S3 buckets
+Infrastructure defined as code using Terraform modules
 
-CloudWatch agent
+## How to Use This Project
+1. Install Prerequisites
 
-Autoscaling operations
+You will need:
 
-SNS publish actions
+Terraform ≥ 1.0
 
-CodeDeploy service role
+AWS CLI configured with valid credentials
 
-Lambda execution role with S3, DynamoDB, SES, and Lambda permissions
+An AWS account with appropriate permissions
 
-### 9. Logging & Monitoring
+2. Initialize Terraform
+`terraform init`
 
-CloudWatch log group and streams for application logs
+3. Validate Configuration
+`terraform validate`
 
-High/Low CPU CloudWatch alarms connected to Auto Scaling policies
+4. Preview the Infrastructure Plan
+`terraform plan`
 
-### 10. Serverless (Lambda)
-
-Lambda function for password reset workflow
-
-Packaged from passwordReset.zip
-
-SNS topic triggers Lambda execution
-
-Role permissions for S3, SES, DynamoDB, and Lambda API calls
-
-### 11. Messaging & Email (SNS, SES, SQS)
-
-SNS topic for password reset
-
-SES bounce/complaint handling:
-
-SQS queues
-
-SNS topics
-
-IAM queue policies for secure message publishing
-
-### 12. DNS (Route 53)
-
-A-record for the domain pointing to ALB via alias
-
-## Purpose
-
-This Terraform project delivers an end-to-end AWS environment suitable for hosting a production web application with:
-
-  Scalable compute resources
-  
-  Reliable database backend
-  
-  Automated deployments
-  
-  Secure networking
-  
-  Monitoring, logging, and alerting
-  
-  Serverless support for email and background workflows
+5. Apply the Infrastructure
+`terraform apply`
