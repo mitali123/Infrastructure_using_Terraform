@@ -15,7 +15,8 @@ The architecture consists of the following major components:
 
 ## Architecture Overview
 
-```                       ┌────────────────────────────┐
+```                       
+                          ┌────────────────────────────┐
                           │          Route 53          │
                           │  DNS (app.example.com)     │
                           └─────────────┬──────────────┘
@@ -166,13 +167,13 @@ AWS CLI configured with valid credentials
 An AWS account with appropriate permissions
 
 2. Initialize Terraform
-`terraform init`
+``` terraform init ```
 
 3. Validate Configuration
-`terraform validate`
+``` terraform validate ```
 
 4. Preview the Infrastructure Plan
-`terraform plan`
+``` terraform plan ```
 
 5. Apply the Infrastructure
-`terraform apply`
+``` terraform apply ```
